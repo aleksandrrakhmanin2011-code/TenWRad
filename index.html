@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TenW Meteo — Карта рисков</title>
+    
+    <meta name="theme-color" content="#0b0e17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0b0e17;
+            color: #e0e6ed;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .navbar {
+            background: #141a26;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #2a3a50;
+            z-index: 2000;
+            min-height: 56px;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .navbar .logo { font-size: 18px; font-weight: 800; color: #6ab0f7; white-space: nowrap; }
+        .navbar .logo span { color: #f0b34b; }
+        .navbar .sub { font-size: 10px; color: #8899b0; display: none; }
+
+        .mode-switcher {
+            display: flex;
+            gap: 3px;
+            background: #1a2230;
+            padding: 3px;
+            border-radius: 25px;
+            border: 1px solid #2a3a50;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+        .mode-switcher button {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: transparent;
+            color: #8899b0;
+            white-space: nowrap;
+            touch-action: manipulation;
+        }
+        .mode-switcher button:active { transform: scale(0.95); }
+        .mode-switcher button.active { background: #2a5a8a; color: #fff; }
+
+        #map {
+            height: calc(100vh - 56px);
+            width: 100%;
+            background: #0b0e17;
+            position: relative;
+        }
+
+        /* ===== АДМИН-КНОПКА ===== */
+        #adminPanel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1001;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: rgba(20, 26, 38, 0.9);
+            padding: 6px 12px;
+            border-radius: 25px;
+            border: 1px solid #2a3a50;
+            backdrop-filter: blur(10px);
+        }
+        #adminPanel input {
+            padding: 4px 10px;
+            border-radius: 15px;
+            border: 1px solid #2a3a50;
+            background: #0b0e17;
+            color: #e0e6ed;
+            font-size: 11px;
+            width: 100px;
+            display: none;
+        }
+        #adminPanel input:focus { outline: none; border-color: #6ab0f7; }
+        #adminPanel button {
+            padding: 4px 12px;
+            border: none;
+            border-radius: 15px;
+            background: #2a5a8a;
+            color: #fff;
+            font-weight: 600;
+            font-size: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        #adminPanel button:active { transform: scale(0.95); }
+        #adminPanel .status {
+            font-size: 9px;
+            color: #8899b0;
+            display: none;
+        }
+        #adminPanel .status.active { color: #2ecc71; display: inline; }
+        #adminPanel .status.inactive { color: #e74c3c; display: inline; }
+        #adminPanel .lock-icon { font-size: 14px; }
+
+        #forecastContainer {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            background: #0b0e17;
+            display: none;
+            overflow-y: auto;
+            padding: 15px 15px 30px;
+            -webkit-overflow-scrolling: touch;
+        }
+        #forecastContainer.visible { display: block; }
+        .forecast-title { font-size: 20px; font-weight: 700; color: #6ab0f7; text-align: center; margin-bottom: 15px; }
+
+        .city-input {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .city-input input {
+            padding: 10px 18px;
+            border-radius: 25px;
+            border: 1px solid #2a3a50;
+            background: #0b0e17;
+            color: #e0e6ed;
+            font-size: 14px;
+            width: 200px;
+            max-width: 70%;
+        }
+        .city-input input:focus { outline: none; border-color: #6ab0f7; }
+        .city-input button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: #2a5a8a;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .city-input button:active { transform: scale(0.95); }
+
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin: 15px 0;
+        }
+        .forecast-day {
+            background: #141a26;
+            padding: 10px 6px;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            text-align: center;
+        }
+        .forecast-day .date { font-size: 10px; color: #8899b0; }
+        .forecast-day .icon { font-size: 24px; }
+        .forecast-day .temp { font-size: 16px; font-weight: 700; }
+        .forecast-day .temp.max { color: #ff6b35; }
+        .forecast-day .temp.min { color: #4fc3f7; }
+        .forecast-day .desc { font-size: 9px; color: #c0d0e0; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin: 18px 0;
+        }
+        .chart-box {
+            background: #141a26;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            padding: 12px;
+        }
+        .chart-box .subtitle { font-size: 12px; font-weight: 600; color: #6ab0f7; text-align: center; margin-bottom: 8px; }
+        .chart-box canvas { width: 100% !important; max-height: 120px; }
+
+        .sounding-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 18px 0;
+        }
+        .sounding-box {
+            background: #141a26;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            padding: 15px;
+        }
+        .sounding-box .subtitle { font-size: 14px; font-weight: 600; color: #6ab0f7; text-align: center; margin-bottom: 10px; }
+        #soundingCanvas { width: 100% !important; max-height: 280px; background: #0b0e17; border-radius: 6px; }
+
+        .indices-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+        }
+        .index-item {
+            background: #0b0e17;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid #2a3a50;
+            text-align: center;
+        }
+        .index-item .idx-label { font-size: 8px; color: #8899b0; text-transform: uppercase; }
+        .index-item .idx-value { font-size: 13px; font-weight: 700; color: #6ab0f7; }
+        .index-item .idx-value.cape { color: #ff6b35; }
+        .index-item .idx-value.cin { color: #4fc3f7; }
+        .index-item .idx-value.srh { color: #81c784; }
+
+        .loading { text-align: center; color: #8899b0; padding: 40px; font-size: 16px; }
+        .error-msg { text-align: center; color: #ff6b6b; padding: 30px; font-size: 14px; }
+
+        #radarContainer {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            background: #0b0e17;
+            display: none;
+        }
+        #radarContainer.visible { display: block; }
+        .radar-title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            font-size: 16px;
+            font-weight: 700;
+            color: #6ab0f7;
+            background: rgba(11,14,23,0.85);
+            padding: 6px 16px;
+            border-radius: 25px;
+            border: 1px solid #2a3a50;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .radar-sub {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            color: #8899b0;
+            font-size: 10px;
+            background: rgba(11,14,23,0.85);
+            padding: 4px 16px;
+            border-radius: 16px;
+            border: 1px solid #2a3a50;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #windyFrame { width: 100%; height: 100%; border: none; }
+
+        #cursorPopup {
+            position: absolute;
+            top: 50%;
+            left: 12px;
+            transform: translateY(-50%);
+            z-index: 1000;
+            background: rgba(16,24,36,0.92);
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            font-size: 11px;
+            color: #c0d0e0;
+            display: none;
+            min-width: 80px;
+            text-align: center;
+            pointer-events: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+        #cursorPopup.visible { display: flex; }
+        #cursorPopup .coords { color: #8899b0; font-size: 8px; border-bottom: 1px solid #2a3a50; padding-bottom: 4px; }
+        #cursorPopup .weather-item { display: flex; flex-direction: column; align-items: center; }
+        #cursorPopup .weather-item .label { font-size: 7px; color: #8899b0; text-transform: uppercase; }
+        #cursorPopup .weather-item .value { font-size: 13px; font-weight: 700; }
+        #cursorPopup .weather-item .value.temp { color: #ff6b35; }
+        #cursorPopup .weather-item .value.precip { color: #4fc3f7; }
+        #cursorPopup .weather-item .value.wind { color: #81c784; }
+        #cursorPopup .weather-item .value.pressure { color: #ce93d8; }
+
+        .layer-panel {
+            position: absolute;
+            top: 70px;
+            right: 12px;
+            z-index: 1000;
+            background: #141a26;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            min-width: 130px;
+            display: none;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .layer-panel.visible { display: block; }
+        .layer-panel .title { font-weight: 700; font-size: 11px; color: #8899b0; text-transform: uppercase; border-bottom: 1px solid #1f2a3a; padding-bottom: 6px; margin-bottom: 8px; }
+        .layer-panel label { display: flex; align-items: center; gap: 8px; color: #c0d0e0; font-size: 12px; padding: 4px 0; cursor: pointer; }
+        .layer-panel input[type="radio"] { accent-color: #6ab0f7; width: 14px; height: 14px; cursor: pointer; }
+
+        .legend {
+            position: absolute;
+            bottom: 80px;
+            left: 12px;
+            z-index: 1000;
+            background: #101824;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #2a3a50;
+            font-size: 11px;
+            min-width: 120px;
+            display: none;
+        }
+        .legend.visible { display: block; }
+        .legend .title { font-weight: 700; margin-bottom: 4px; color: #aabbdd; border-bottom: 1px solid #1f2a3a; padding-bottom: 4px; font-size: 11px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin: 3px 0; color: #b0c4dd; font-size: 10px; }
+        .legend-color { width: 18px; height: 10px; border-radius: 3px; border: 1px solid #2a3a50; }
+
+        .toolbar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: #141a26;
+            padding: 8px 12px;
+            border-radius: 30px;
+            border: 1px solid #2a3a50;
+            display: none;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 95%;
+        }
+        .toolbar.visible { display: flex; }
+        .toolbar button {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 10px;
+            cursor: pointer;
+            background: #1f2a3a;
+            color: #c0d0e0;
+            border: 1px solid #2f4058;
+            transition: 0.2s;
+            white-space: nowrap;
+            touch-action: manipulation;
+        }
+        .toolbar button:active { transform: scale(0.95); }
+        .toolbar .success { background: #1a5a3a; color: #80e0b0; border-color: #2a8a5a; }
+        .toolbar .danger { background: #6a2a2a; color: #ffa0a0; border-color: #8a3a3a; }
+
+        .leaflet-control-zoom a { background: #141a26 !important; color: #c0d0e0 !important; border-color: #2a3a50 !important; touch-action: manipulation !important; }
+        .leaflet-control-zoom a:hover { background: #1f2a3a !important; }
+        .leaflet-draw-toolbar a { background: #141a26 !important; color: #c0d0e0 !important; border-color: #2a3a50 !important; touch-action: manipulation !important; }
+        .leaflet-draw-toolbar a:hover { background: #1f2a3a !important; }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 6px 10px; min-height: 48px; }
+            .navbar .logo { font-size: 15px; }
+            .mode-switcher button { font-size: 9px; padding: 3px 8px; }
+            #forecastContainer { padding: 10px 10px 20px; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .sounding-section { grid-template-columns: 1fr; }
+            .indices-grid { grid-template-columns: 1fr 1fr; }
+            .forecast-title { font-size: 17px; }
+            .city-input input { width: 160px; font-size: 12px; padding: 8px 14px; }
+            .city-input button { font-size: 12px; padding: 8px 16px; }
+            .toolbar button { font-size: 9px; padding: 3px 8px; }
+            .radar-title { font-size: 13px; padding: 4px 12px; top: 8px; }
+            .radar-sub { font-size: 9px; padding: 3px 12px; bottom: 8px; }
+            #cursorPopup { left: 8px; min-width: 65px; padding: 6px 8px; font-size: 9px; }
+            #cursorPopup .weather-item .value { font-size: 11px; }
+            .layer-panel { right: 8px; min-width: 100px; padding: 8px; }
+            .legend { left: 8px; bottom: 70px; min-width: 100px; padding: 8px 10px; }
+            .leaflet-control-zoom { bottom: 70px !important; }
+            .leaflet-draw-toolbar { bottom: 70px !important; }
+            #adminPanel { top: 5px; right: 5px; padding: 4px 8px; }
+            #adminPanel input { width: 70px; font-size: 10px; }
+            #adminPanel button { font-size: 9px; padding: 3px 8px; }
+        }
+        @media (max-width: 400px) {
+            .navbar .sub { display: none; }
+            .mode-switcher button { font-size: 8px; padding: 2px 6px; }
+            .forecast-grid { grid-template-columns: repeat(auto-fit, minmax(65px, 1fr)); }
+            .forecast-day .temp { font-size: 13px; }
+            .forecast-day .icon { font-size: 20px; }
+            .city-input input { width: 120px; font-size: 11px; }
+            #adminPanel input { width: 60px; font-size: 9px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <div class="logo">🌩 TenW <span>Meteo</span></div>
+        <div class="mode-switcher">
+            <button id="modeRisks" class="active" onclick="setMode('risks')">⚠️ Риски</button>
+            <button id="modeLayers" onclick="setMode('layers')">🌦 Слои</button>
+            <button id="modeForecast" onclick="setMode('forecast')">📈 Прогноз</button>
+            <button id="modeRadar" onclick="setMode('radar')">📡 Радар</button>
+        </div>
+        <div class="sub">Карта конвективных рисков</div>
+    </div>
+
+    <div id="map">
+        <!-- ===== АДМИН-ПАНЕЛЬ (вход по паролю) ===== -->
+        <div id="adminPanel">
+            <span class="lock-icon" id="lockIcon">🔒</span>
+            <input type="password" id="adminPassword" placeholder="Пароль" style="display:none;">
+            <button id="adminLoginBtn" onclick="toggleAdminLogin()">🔑 Вход</button>
+            <span class="status inactive" id="adminStatus">❌</span>
+        </div>
+
+        <div id="cursorPopup">
+            <div class="coords" id="cursorCoords">55.76, 37.64</div>
+            <div class="weather-item"><span class="label">🌡 Темп.</span><span class="value temp" id="cursorTemp">--°C</span></div>
+            <div class="weather-item"><span class="label">🌧 Осадки</span><span class="value precip" id="cursorPrecip">-- мм</span></div>
+            <div class="weather-item"><span class="label">💨 Ветер</span><span class="value wind" id="cursorWind">-- м/с</span></div>
+            <div class="weather-item"><span class="label">📊 Давл.</span><span class="value pressure" id="cursorPressure">-- гПа</span></div>
+        </div>
+
+        <div id="forecastContainer">
+            <div class="forecast-title">📈 Профессиональный прогноз погоды</div>
+            <div class="city-input">
+                <input type="text" id="cityInput" placeholder="Введите город..." value="Москва">
+                <button onclick="getFullForecast()">🔍 Получить</button>
+            </div>
+            <div id="forecastContent">
+                <div class="loading">⏳ Загрузка данных...</div>
+            </div>
+        </div>
+
+        <div id="radarContainer">
+            <div class="radar-title">📡 Радар (Windy)</div>
+            <div class="radar-sub">Интерактивная карта осадков</div>
+            <iframe 
+                id="windyFrame"
+                src="https://embed.windy.com/embed2.html?lat=55.76&lon=37.64&zoom=6&overlay=rain&menu=true&message=true&marker=true&calendar=now&pressure=true&type=map&location=coordinates&detail=true&detailLat=55.76&detailLon=37.64&metricTemp=°C&metricWind=km/h&metricPressure=mmHg"
+                frameborder="0" loading="lazy">
+            </iframe>
+        </div>
+    </div>
+
+    <div class="layer-panel" id="layerPanel">
+        <div class="title">🌦 Синоптические слои</div>
+        <label><input type="radio" name="layer" value="none" checked> Без слоя</label>
+        <label><input type="radio" name="layer" value="clouds"> ☁️ Облачность</label>
+        <label><input type="radio" name="layer" value="temp"> 🌡 Температура</label>
+        <label><input type="radio" name="layer" value="pressure"> 📊 Давление</label>
+        <label><input type="radio" name="layer" value="wind"> 💨 Ветер</label>
+        <label><input type="radio" name="layer" value="precip"> 🌧 Осадки</label>
+    </div>
+
+    <div class="legend visible" id="legend">
+        <div class="title">⚡ Уровни риска</div>
+        <div class="legend-item"><span class="legend-color" style="background:#3498db;"></span> Грозовая</div>
+        <div class="legend-item"><span class="legend-color" style="background:#2ecc71;"></span> Низкий</div>
+        <div class="legend-item"><span class="legend-color" style="background:#f1c40f;"></span> Умеренный</div>
+        <div class="legend-item"><span class="legend-color" style="background:#e67e22;"></span> Повышенный</div>
+        <div class="legend-item"><span class="legend-color" style="background:#e74c3c;"></span> Высокий</div>
+    </div>
+
+    <!-- ===== ТУЛБАР (виден только после входа) ===== -->
+    <div class="toolbar" id="toolbar">
+        <button onclick="setRiskLevel('storm')" style="background:#3498db; color:#fff;">⚡ Гроза</button>
+        <button onclick="setRiskLevel('low')" style="background:#2ecc71; color:#000;">🟢 Низк.</button>
+        <button onclick="setRiskLevel('moderate')" style="background:#f1c40f; color:#000;">🟡 Умер.</button>
+        <button onclick="setRiskLevel('high')" style="background:#e67e22; color:#fff;">🟠 Повыш.</button>
+        <button onclick="setRiskLevel('extreme')" style="background:#e74c3c; color:#fff;">🔴 Выс.</button>
+        <button class="success" onclick="saveZones()">💾 Сохр.</button>
+        <button class="success" onclick="generateReport()">📄 Отчёт</button>
+        <button class="danger" onclick="clearAll()">🗑 Очист.</button>
+    </div>
+
+    <script>
+        // ================================================================
+        // ЗАГРУЗКА БИБЛИОТЕК
+        // ================================================================
+        function loadScript(src, callback) {
+            var script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.onload = callback;
+            script.onerror = function() {
+                var fallbackSrc = src.replace('unpkg.com', 'cdnjs.cloudflare.com/ajax/libs');
+                var fallbackScript = document.createElement('script');
+                fallbackScript.src = fallbackSrc;
+                fallbackScript.async = true;
+                fallbackScript.onload = callback;
+                document.head.appendChild(fallbackScript);
+            };
+            document.head.appendChild(script);
+        }
+
+        function loadStylesheet(href) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            document.head.appendChild(link);
+        }
+
+        loadStylesheet('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+        loadStylesheet('https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css');
+
+        var scripts = [
+            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+            'https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js',
+            'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
+        ];
+
+        var loaded = 0;
+        scripts.forEach(function(src) {
+            loadScript(src, function() {
+                loaded++;
+                if (loaded === scripts.length) {
+                    console.log('✅ Все библиотеки загружены');
+                    initApp();
+                }
+            });
+        });
+
+        // ================================================================
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+        // ================================================================
+        var API_KEY = '664d40e74d40ebde4470d75ef91a757a';
+        var WINDY_KEY = '3A5rP01fyjFhE2a13vsUpA7IzuOon1WJ';
+        var currentMode = 'risks';
+        var chartInstances = {};
+        var map, drawnItems, drawControl, layerGroup;
+        var isMobile = window.innerWidth < 768;
+        var currentRisk = 'storm';
+        var isAdmin = false;
+
+        // ================================================================
+        // ★★★ КОНФИГУРАЦИЯ SUPABASE ★★★
+        // ================================================================
+        var SUPABASE_URL = 'https://wpjostnquydhwvcltgny.supabase.co';
+        var SUPABASE_KEY = 'sb_publishable_e78uAbOF1J2hiSaLTPS8yA_maTBxCze';
+
+        // ================================================================
+        // ★★★ АДМИН-ЛОГИН ★★★
+        // ================================================================
+        var ADMIN_PASSWORD = 'TenWrad1.0';
+
+        function toggleAdminLogin() {
+            var input = document.getElementById('adminPassword');
+            var btn = document.getElementById('adminLoginBtn');
+            
+            if (isAdmin) {
+                // Выход
+                isAdmin = false;
+                document.getElementById('lockIcon').textContent = '🔒';
+                document.getElementById('adminStatus').textContent = '❌';
+                document.getElementById('adminStatus').className = 'status inactive';
+                btn.textContent = '🔑 Вход';
+                input.style.display = 'none';
+                document.getElementById('toolbar').classList.remove('visible');
+                if (drawControl) {
+                    try { map.removeControl(drawControl); } catch(e) {}
+                }
+                alert('🔒 Вы вышли из режима модератора');
+                return;
+            }
+
+            if (input.style.display === 'none') {
+                input.style.display = 'inline-block';
+                input.value = '';
+                input.focus();
+                btn.textContent = '✅ Войти';
+                return;
+            }
+
+            // Проверка пароля
+            if (input.value === ADMIN_PASSWORD) {
+                isAdmin = true;
+                document.getElementById('lockIcon').textContent = '🔓';
+                document.getElementById('adminStatus').textContent = '✅';
+                document.getElementById('adminStatus').className = 'status active';
+                btn.textContent = '🚪 Выйти';
+                input.style.display = 'none';
+                document.getElementById('toolbar').classList.add('visible');
+                // Показываем кнопку рисования
+                if (drawControl) {
+                    try { 
+                        if (!map.hasControl(drawControl)) {
+                            map.addControl(drawControl); 
+                        }
+                    } catch(e) {}
+                }
+                alert('✅ Добро пожаловать, модератор! Теперь вы можете рисовать зоны риска.');
+            } else {
+                alert('❌ Неверный пароль!');
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        // Вход по Enter
+        document.addEventListener('DOMContentLoaded', function() {
+            var input = document.getElementById('adminPassword');
+            if (input) {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        toggleAdminLogin();
+                    }
+                });
+            }
+        });
+
+        // ================================================================
+        // ИНИЦИАЛИЗАЦИЯ
+        // ================================================================
+        function initApp() {
+            console.log('🌩 TenW Meteo инициализация...');
+            
+            if (typeof L === 'undefined') {
+                document.getElementById('map').innerHTML = 
+                    '<div style="color:#ff6b6b;padding:40px;text-align:center;font-size:18px;">❌ Ошибка загрузки Leaflet. Проверьте интернет.</div>';
+                return;
+            }
+
+            map = L.map('map', { 
+                center: [55.76, 37.64], 
+                zoom: isMobile ? 5 : 7,
+                zoomControl: !isMobile,
+                attributionControl: true
+            });
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap, CartoDB',
+                maxZoom: 19
+            }).addTo(map);
+            
+            if (isMobile) {
+                L.control.zoom({ position: 'bottomright' }).addTo(map);
+            }
+            
+            console.log('✅ Карта создана');
+
+            initCursor();
+            initLayers();
+            initRisks();
+            
+            // Загружаем зоны из облака (все видят)
+            syncLoadZones();
+            
+            setTimeout(function() {
+                map.invalidateSize();
+            }, 300);
+            
+            window.addEventListener('resize', function() {
+                setTimeout(function() { map.invalidateSize(); }, 200);
+            });
+            
+            console.log('🌩 TenW Meteo полностью загружена!');
+            console.log('🔐 Для рисования зон нужен пароль: TenWrad1.0');
+        }
+
+        // ================================================================
+        // КУРСОР
+        // ================================================================
+        function initCursor() {
+            var cursorPopup = document.getElementById('cursorPopup');
+            var cursorCoords = document.getElementById('cursorCoords');
+            var cursorTemp = document.getElementById('cursorTemp');
+            var cursorPrecip = document.getElementById('cursorPrecip');
+            var cursorWind = document.getElementById('cursorWind');
+            var cursorPressure = document.getElementById('cursorPressure');
+            var cursorTimeout = null;
+
+            if (!map) return;
+
+            map.on('mousemove', function(e) {
+                if (currentMode !== 'layers') { 
+                    if (cursorPopup) cursorPopup.classList.remove('visible'); 
+                    return; 
+                }
+                var lat = e.latlng.lat.toFixed(4);
+                var lng = e.latlng.lng.toFixed(4);
+                if (cursorCoords) cursorCoords.textContent = lat + ', ' + lng;
+                if (cursorPopup) cursorPopup.classList.add('visible');
+                clearTimeout(cursorTimeout);
+                cursorTimeout = setTimeout(function() {
+                    fetchWeatherForPoint(e.latlng.lat, e.latlng.lng);
+                }, 300);
+            });
+            map.on('mouseout', function() { 
+                if (cursorPopup) cursorPopup.classList.remove('visible'); 
+                clearTimeout(cursorTimeout); 
+            });
+        }
+
+        async function fetchWeatherForPoint(lat, lng) {
+            try {
+                var url = 'https://api.openweathermap.org/data/2.5/weather?lat=' + lat + '&lon=' + lng + '&appid=' + API_KEY + '&units=metric';
+                var resp = await fetch(url);
+                var data = await resp.json();
+                if (data.main) {
+                    var tempEl = document.getElementById('cursorTemp');
+                    var pressEl = document.getElementById('cursorPressure');
+                    if (tempEl) tempEl.textContent = Math.round(data.main.temp) + '°C';
+                    if (pressEl) pressEl.textContent = data.main.pressure + ' гПа';
+                }
+                var windEl = document.getElementById('cursorWind');
+                if (data.wind && windEl) windEl.textContent = data.wind.speed.toFixed(1) + ' м/с';
+                
+                var precipEl = document.getElementById('cursorPrecip');
+                if (data.rain && precipEl) {
+                    precipEl.textContent = (data.rain['1h'] || 0).toFixed(1) + ' мм';
+                } else if (data.snow && precipEl) {
+                    precipEl.textContent = (data.snow['1h'] || 0).toFixed(1) + ' мм (снег)';
+                } else if (precipEl) {
+                    precipEl.textContent = '0 мм';
+                }
+            } catch(e) {
+                console.warn('Weather fetch error:', e);
+            }
+        }
+
+        // ================================================================
+        // СЛОИ
+        // ================================================================
+        function initLayers() {
+            layerGroup = L.layerGroup().addTo(map);
+            
+            var OWM_LAYERS = {
+                clouds: { url: 'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=' + API_KEY, opacity: 0.5 },
+                temp: { url: 'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=' + API_KEY, opacity: 0.6 },
+                pressure: { url: 'https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=' + API_KEY, opacity: 0.6 },
+                wind: { url: 'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=' + API_KEY, opacity: 0.5 },
+                precip: { url: 'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=' + API_KEY, opacity: 0.6 }
+            };
+            
+            var layerRadios = document.querySelectorAll('input[name="layer"]');
+            layerRadios.forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    layerGroup.clearLayers();
+                    var value = this.value;
+                    if (value !== 'none' && OWM_LAYERS[value]) {
+                        L.tileLayer(OWM_LAYERS[value].url, { 
+                            opacity: OWM_LAYERS[value].opacity, 
+                            attribution: '© OpenWeatherMap', 
+                            zIndex: 500 
+                        }).addTo(layerGroup);
+                    }
+                });
+            });
+        }
+
+        // ================================================================
+        // РИСКИ (с админ-доступом)
+        // ================================================================
+        function initRisks() {
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+            
+            var RISK_COLORS = {
+                storm: { fill: '#3498db', border: '#2980b9', label: 'Грозовая активность' },
+                low: { fill: '#2ecc71', border: '#27ae60', label: 'Низкий риск' },
+                moderate: { fill: '#f1c40f', border: '#d4ac0d', label: 'Умеренный риск' },
+                high: { fill: '#e67e22', border: '#ca6f1e', label: 'Повышенный риск' },
+                extreme: { fill: '#e74c3c', border: '#b03a2e', label: 'Высокий риск' }
+            };
+            
+            window.setRiskLevel = function(level) { 
+                if (RISK_COLORS[level]) currentRisk = level; 
+                if (drawControl) {
+                    drawControl.setDrawingOptions({
+                        polygon: {
+                            shapeOptions: { 
+                                color: RISK_COLORS[currentRisk].border, 
+                                fillColor: RISK_COLORS[currentRisk].fill, 
+                                fillOpacity: 0.4, 
+                                weight: 3 
+                            }
+                        },
+                        rectangle: {
+                            shapeOptions: { 
+                                color: RISK_COLORS[currentRisk].border, 
+                                fillColor: RISK_COLORS[currentRisk].fill, 
+                                fillOpacity: 0.4, 
+                                weight: 3 
+                            }
+                        }
+                    });
+                }
+            };
+
+            // СОЗДАЁМ КНОПКУ РИСОВАНИЯ (НО ПОКА СКРЫТА)
+            drawControl = new L.Control.Draw({
+                position: 'topleft',
+                draw: {
+                    polygon: { 
+                        allowIntersection: false, 
+                        showArea: true, 
+                        shapeOptions: { 
+                            color: RISK_COLORS[currentRisk].border, 
+                            fillColor: RISK_COLORS[currentRisk].fill, 
+                            fillOpacity: 0.4, 
+                            weight: 3 
+                        } 
+                    },
+                    rectangle: { 
+                        shapeOptions: { 
+                            color: RISK_COLORS[currentRisk].border, 
+                            fillColor: RISK_COLORS[currentRisk].fill, 
+                            fillOpacity: 0.4, 
+                            weight: 3 
+                        } 
+                    },
+                    circle: false, 
+                    circlemarker: false, 
+                    marker: false, 
+                    polyline: false
+                },
+                edit: { featureGroup: drawnItems, remove: true }
+            });
+            // НЕ ДОБАВЛЯЕМ НА КАРТУ СРАЗУ! ЖДЁМ ПАРОЛЬ
+            console.log('✅ Кнопка рисования создана (скрыта до входа)');
+
+            // Событие рисования
+            map.on('draw:created', function(event) {
+                if (!isAdmin) {
+                    alert('⛔ Только модераторы могут рисовать зоны!');
+                    return;
+                }
+                var layer = event.layer;
+                var color = RISK_COLORS[currentRisk];
+                layer.setStyle({ color: color.border, fillColor: color.fill, fillOpacity: 0.4, weight: 3 });
+                layer.bindTooltip(color.label, { permanent: false, direction: 'center' });
+                layer.riskLevel = currentRisk;
+                drawnItems.addLayer(layer);
+                syncSaveZones();
+            });
+
+            window.saveZones = function() {
+                if (!isAdmin) {
+                    alert('⛔ Только модераторы могут сохранять зоны!');
+                    return;
+                }
+                syncSaveZones();
+            };
+
+            window.clearAll = function() {
+                if (!isAdmin) {
+                    alert('⛔ Только модераторы могут удалять зоны!');
+                    return;
+                }
+                if (drawnItems.getLayers().length === 0) return;
+                if (confirm('Удалить все зоны?')) { 
+                    drawnItems.clearLayers(); 
+                    syncSaveZones();
+                }
+            };
+
+            window.generateReport = function() {
+                var layers = drawnItems.getLayers();
+                if (layers.length === 0) { alert('❗ Нет нарисованных зон.'); return; }
+                var text = '═══════════════════════════════════════════\n🌩 TenW Meteo — ОТЧЁТ ПО РИСКАМ\n═══════════════════════════════════════════\n';
+                text += 'Дата: ' + new Date().toLocaleString() + '\nВсего зон: ' + layers.length + '\n\n';
+                for (var i = 0; i < layers.length; i++) {
+                    var layer = layers[i];
+                    try {
+                        var latlngs = layer.getLatLngs()[0];
+                        var coords = latlngs.map(function(p) { return p.lat.toFixed(4) + ', ' + p.lng.toFixed(4); }).join(' → ');
+                        var area = L.GeometryUtil.geodesicArea(latlngs);
+                        var tooltip = layer.getTooltip();
+                        var riskLabel = tooltip ? tooltip.getContent() : 'Неизвестно';
+                        text += '───────────────────────────────────────────\nЗона #' + (i+1) + ' [' + riskLabel + ']\nКоординаты: ' + coords + '\nПлощадь: ' + (area/1000000).toFixed(2) + ' км²\n';
+                    } catch(e) {}
+                }
+                text += '\n═══════════════════════════════════════════\n';
+                var win = window.open('', '_blank', 'width=700,height=600');
+                if (win) {
+                    win.document.write('<html><head><title>Отчёт</title><style>body{background:#0b0e17;color:#c0d0e0;font-family:monospace;padding:30px}pre{font-size:14px;line-height:1.6}.print-btn{background:#2a5a7a;color:#fff;border:none;padding:12px 30px;border-radius:30px;cursor:pointer;margin-top:20px}</style></head><body><pre>' + text + '</pre><button class="print-btn" onclick="window.print()">🖨 Сохранить PDF</button></body></html>');
+                    win.document.close();
+                } else {
+                    alert('Браузер заблокировал открытие окна. Разрешите всплывающие окна.');
+                }
+            };
+        }
+
+        // ================================================================
+        // ★★★ СИНХРОНИЗАЦИЯ С SUPABASE ★★★
+        // ================================================================
+
+        function getZonesFromMap() {
+            var zones = [];
+            drawnItems.eachLayer(function(layer) {
+                try {
+                    var latlngs = layer.getLatLngs()[0];
+                    var coords = latlngs.map(function(p) { return [p.lat, p.lng]; });
+                    var tooltip = layer.getTooltip();
+                    var label = tooltip ? tooltip.getContent() : 'Риск';
+                    zones.push({ 
+                        coords: coords, 
+                        color: layer.options.fillColor || '#3498db',
+                        border: layer.options.color || '#2980b9',
+                        label: label, 
+                        riskLevel: layer.riskLevel || 'moderate'
+                    });
+                } catch(e) {
+                    console.warn('Ошибка при чтении слоя:', e);
+                }
+            });
+            return zones;
+        }
+
+        async function syncSaveZones() {
+            if (!isAdmin) {
+                alert('⛔ Только модераторы могут сохранять зоны!');
+                return;
+            }
+            try {
+                var zones = getZonesFromMap();
+                
+                await fetch(SUPABASE_URL + '/rest/v1/zones?user_id=eq.default', {
+                    method: 'DELETE',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_KEY
+                    }
+                });
+
+                for (var i = 0; i < zones.length; i++) {
+                    await fetch(SUPABASE_URL + '/rest/v1/zones', {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': 'Bearer ' + SUPABASE_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            user_id: 'default',
+                            coords: zones[i].coords,
+                            color: zones[i].color,
+                            border: zones[i].border,
+                            label: zones[i].label,
+                            risk_level: zones[i].riskLevel
+                        })
+                    });
+                }
+
+                console.log('✅ Зоны сохранены в Supabase');
+                alert('✅ Зоны синхронизированы с облаком!');
+
+            } catch(e) {
+                console.error('❌ Ошибка сохранения в Supabase:', e);
+                alert('⚠️ Ошибка синхронизации: ' + e.message);
+            }
+        }
+
+        async function syncLoadZones() {
+            try {
+                console.log('📡 Загрузка зон из Supabase...');
+                
+                var resp = await fetch(SUPABASE_URL + '/rest/v1/zones?user_id=eq.default', {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_KEY
+                    }
+                });
+
+                var zones = await resp.json();
+                
+                if (!zones || zones.length === 0) {
+                    console.log('ℹ️ Нет сохранённых зон');
+                    return;
+                }
+
+                console.log('✅ Загружено зон:', zones.length);
+
+                drawnItems.clearLayers();
+
+                zones.forEach(function(zone) {
+                    try {
+                        var latlngs = zone.coords.map(function(p) { return [p[0], p[1]]; });
+                        var layer = L.polygon(latlngs, {
+                            color: zone.border || '#3498db',
+                            fillColor: zone.color || '#3498db',
+                            fillOpacity: 0.4,
+                            weight: 3
+                        });
+                        layer.bindTooltip(zone.label || 'Риск', { permanent: false, direction: 'center' });
+                        layer.riskLevel = zone.risk_level || 'moderate';
+                        drawnItems.addLayer(layer);
+                    } catch(e) {
+                        console.warn('Ошибка при отрисовке зоны:', e);
+                    }
+                });
+
+                console.log('✅ Зоны загружены из облака');
+
+            } catch(e) {
+                console.error('❌ Ошибка загрузки из Supabase:', e);
+                alert('⚠️ Ошибка загрузки зон: ' + e.message);
+            }
+        }
+
+        // ================================================================
+        // ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ
+        // ================================================================
+        window.setMode = function(mode) {
+            currentMode = mode;
+            var isRisks = mode === 'risks';
+            var isLayers = mode === 'layers';
+            var isForecast = mode === 'forecast';
+            var isRadar = mode === 'radar';
+            
+            var modeRisks = document.getElementById('modeRisks');
+            var modeLayers = document.getElementById('modeLayers');
+            var modeForecast = document.getElementById('modeForecast');
+            var modeRadar = document.getElementById('modeRadar');
+            
+            if (modeRisks) modeRisks.classList.toggle('active', isRisks);
+            if (modeLayers) modeLayers.classList.toggle('active', isLayers);
+            if (modeForecast) modeForecast.classList.toggle('active', isForecast);
+            if (modeRadar) modeRadar.classList.toggle('active', isRadar);
+            
+            var layerPanel = document.getElementById('layerPanel');
+            var toolbar = document.getElementById('toolbar');
+            var legend = document.getElementById('legend');
+            var forecastContainer = document.getElementById('forecastContainer');
+            var radarContainer = document.getElementById('radarContainer');
+            var cursorPopup = document.getElementById('cursorPopup');
+            
+            if (layerPanel) layerPanel.classList.toggle('visible', isLayers);
+            if (toolbar) toolbar.classList.toggle('visible', isRisks && isAdmin);
+            if (legend) legend.classList.toggle('visible', isRisks);
+            if (forecastContainer) forecastContainer.classList.toggle('visible', isForecast);
+            if (radarContainer) radarContainer.classList.toggle('visible', isRadar);
+            
+            if (cursorPopup && !isLayers) {
+                cursorPopup.classList.remove('visible');
+            }
+            
+            var zoomControl = document.querySelector('.leaflet-control-zoom');
+            if (zoomControl) {
+                zoomControl.style.display = (isRisks || isLayers) ? 'block' : 'none';
+            }
+            
+            if (isRisks && isAdmin && drawControl) {
+                try { 
+                    if (!map.hasControl(drawControl)) {
+                        map.addControl(drawControl); 
+                    }
+                } catch(e) {}
+                if (drawnItems) {
+                    drawnItems.eachLayer(function(layer) {
+                        if (layer.setStyle) layer.setStyle({ opacity: 1, fillOpacity: 0.4 });
+                    });
+                }
+            } else if ((!isRisks || !isAdmin) && drawControl) {
+                try { 
+                    if (map.hasControl(drawControl)) {
+                        map.removeControl(drawControl); 
+                    }
+                } catch(e) {}
+                if (drawnItems) {
+                    drawnItems.eachLayer(function(layer) {
+                        if (layer.setStyle) layer.setStyle({ opacity: 0.2, fillOpacity: 0.1 });
+                    });
+                }
+            }
+            
+            if (isForecast) {
+                getFullForecast();
+            }
+            
+            setTimeout(function() {
+                if (map) map.invalidateSize();
+            }, 300);
+        };
+
+        // ================================================================
+        // ПРОГНОЗ
+        // ================================================================
+        window.getFullForecast = async function() {
+            var cityInput = document.getElementById('cityInput');
+            var city = cityInput ? cityInput.value.trim() : 'Москва';
+            if (!city) city = 'Москва';
+            
+            var content = document.getElementById('forecastContent');
+            if (content) content.innerHTML = '<div class="loading">⏳ Загрузка данных...</div>';
+            
+            try {
+                var geoUrl = 'https://api.openweathermap.org/geo/1.0/direct?q=' + encodeURIComponent(city) + '&limit=1&appid=' + API_KEY;
+                var geoResp = await fetch(geoUrl);
+                var geoData = await geoResp.json();
+                
+                if (!geoData || !geoData.length) {
+                    if (content) content.innerHTML = '<div class="error-msg">❌ Город не найден</div>';
+                    return;
+                }
+                
+                var lat = geoData[0].lat;
+                var lon = geoData[0].lon;
+                
+                var forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?lat=' + lat + '&lon=' + lon + '&appid=' + API_KEY + '&units=metric&cnt=40';
+                var forecastResp = await fetch(forecastUrl);
+                var forecastData = await forecastResp.json();
+                
+                if (!forecastData.list) {
+                    if (content) content.innerHTML = '<div class="error-msg">❌ Ошибка загрузки прогноза</div>';
+                    return;
+                }
+
+                var days = {};
+                forecastData.list.forEach(function(item) {
+                    var date = item.dt_txt.split(' ')[0];
+                    if (!days[date]) days[date] = [];
+                    days[date].push(item);
+                });
+                var dates = Object.keys(days).slice(0, 7);
+
+                var html = '';
+                
+                html += '<div class="forecast-grid">';
+                dates.forEach(function(date) {
+                    var items = days[date];
+                    var temps = items.map(function(i) { return i.main.temp; });
+                    var max = Math.max.apply(null, temps);
+                    var min = Math.min.apply(null, temps);
+                    var weather = items[0].weather[0];
+                    var dateObj = new Date(date);
+                    var dayName = dateObj.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+                    var icons = { 'Clear': '☀️', 'Clouds': '☁️', 'Rain': '🌧', 'Snow': '❄️', 'Thunderstorm': '⛈', 'Drizzle': '🌦', 'Mist': '🌫', 'Fog': '🌫' };
+                    var icon = icons[weather.main] || '🌤';
+                    html += '<div class="forecast-day"><div class="date">' + dayName + '</div><div class="icon">' + icon + '</div><div style="display:flex;justify-content:center;gap:6px;"><span class="temp max">' + Math.round(max) + '°</span><span class="temp min">' + Math.round(min) + '°</span></div><div class="desc">' + weather.description + '</div></div>';
+                });
+                html += '</div>';
+
+                html += '<div class="charts-grid">' +
+                    '<div class="chart-box"><div class="subtitle">🌡 Температура</div><canvas id="tempChart"></canvas></div>' +
+                    '<div class="chart-box"><div class="subtitle">🌧 Осадки</div><canvas id="precipChart"></canvas></div>' +
+                    '<div class="chart-box"><div class="subtitle">💨 Ветер</div><canvas id="windChart"></canvas></div>' +
+                '</div>';
+
+                if (content) content.innerHTML = html;
+
+                var labels = dates.map(function(d) {
+                    var date = new Date(d);
+                    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+                });
+
+                var tempData = dates.map(function(d) {
+                    var items = days[d];
+                    var temps = items.map(function(i) { return i.main.temp; });
+                    return Math.round(temps.reduce(function(a,b) { return a+b; }, 0) / temps.length);
+                });
+                drawChart('tempChart', labels, tempData, '#ff6b35', '°C');
+
+                var precipData = dates.map(function(d) {
+                    var total = 0;
+                    days[d].forEach(function(item) {
+                        if (item.rain) total += item.rain['3h'] || 0;
+                    });
+                    return Math.round(total * 10) / 10;
+                });
+                drawChart('precipChart', labels, precipData, '#4fc3f7', 'мм');
+
+                var windData = dates.map(function(d) {
+                    var items = days[d];
+                    var winds = items.map(function(i) { return i.wind.speed; });
+                    return Math.round(winds.reduce(function(a,b) { return a+b; }, 0) / winds.length * 10) / 10;
+                });
+                drawChart('windChart', labels, windData, '#81c784', 'м/с');
+
+            } catch(e) {
+                if (content) content.innerHTML = '<div class="error-msg">❌ Ошибка: ' + e.message + '</div>';
+                console.error(e);
+            }
+        };
+
+        function drawChart(id, labels, data, color, unit) {
+            var canvas = document.getElementById(id);
+            if (!canvas) return;
+            if (chartInstances[id]) { chartInstances[id].destroy(); }
+            try {
+                chartInstances[id] = new Chart(canvas.getContext('2d'), {
+                    type: 'bar',
+                    data: { 
+                        labels: labels, 
+                        datasets: [{ 
+                            label: unit, 
+                            data: data, 
+                            backgroundColor: color + '80', 
+                            borderColor: color, 
+                            borderWidth: 2 
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: true, 
+                        plugins: { legend: { display: false } }, 
+                        scales: { 
+                            y: { beginAtZero: true, grid: { color: '#1a2230' }, ticks: { color: '#8899b0' } }, 
+                            x: { grid: { color: '#1a2230' }, ticks: { color: '#8899b0' } } 
+                        } 
+                    }
+                });
+            } catch(e) {
+                console.warn('Chart error:', e);
+            }
+        }
+
+        // ================================================================
+        // ЗАПУСК
+        // ================================================================
+        if (typeof L !== 'undefined' && typeof Chart !== 'undefined') {
+            initApp();
+        }
+
+        console.log('🌩 TenW Meteo загружается...');
+        console.log('📱 Мобильный режим:', isMobile);
+        console.log('🔐 Пароль для входа: TenWrad1.0');
+        console.log('🔗 Supabase URL:', SUPABASE_URL);
+    </script>
+</body>
+</html>
